@@ -3,13 +3,19 @@
 import argparse
 import hashlib
 import logging
+import nltk
 logging.basicConfig(level=logging.INFO)
 from urllib.parse import urlparse
+from nltk.corpus import stopwords
 
 import pandas as pd
 
 logger = logging.getLogger(__name__)  #esto es solo para saber donde se está ejecutando nuestro codigo.
 
+nltk.download('punkt')  # sirve para tokenizar
+nltk.download('stopwords') # para las palabras sin valor
+
+stop_words = set(stopwords.words('spanish'))
 
 def main(filename):
     logger.info('Starting cleaning process')
@@ -20,6 +26,8 @@ def main(filename):
     df = _fill_missing_titles(df)
     df = _generate_uids_for_rows(df)
     df = _remove_new_lines_from_body(df)
+    df = _tokenize_column(df, 'title')
+    df = _tokenize_column(df, 'body')
 
     return df
 
@@ -91,6 +99,22 @@ def _remove_new_lines_from_body(df):
                     )
 
     df['body'] = stripped_body
+
+    return df
+
+
+def _tokenize_column(df, column_name):
+    logger.info('Tokenizing the {}'.format(column_name))
+    tokenize = (df
+                .dropna()
+                .apply(lambda row: nltk.word_tokenize(row[column_name]), axis=1)
+                .apply(lambda tokens: list(filter(lambda token: token.isalpha(), tokens)))
+                .apply(lambda tokens: list(map(lambda token: token.lower(), tokens)))
+                .apply(lambda word_list: list(filter(lambda word: word not in stop_words, word_list)))
+                .apply(lambda valid_word_list: len(valid_word_list))
+            )
+
+    df['n_tokens_{}'.format(column_name)] = tokenize
 
     return df
 
